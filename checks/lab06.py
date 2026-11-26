@@ -113,8 +113,12 @@ def check_task_3(features, metrics: dict, con):
                                   f"не хватает: {missing}")], title=title)
 
     leaks = [c for c in features.columns if c.lower() in LEAKY]
-    exp_rows = int(con.execute(SQL["feature_rows"]).fetchone()[0])
-    exp_late = float(con.execute(SQL["feature_late_rate"]).fetchone()[0])
+    expected_orders = con.execute(
+        "SELECT order_id, CAST(is_late AS INTEGER) AS is_late "
+        "FROM clean_orders WHERE is_delivered"
+    ).df()
+    exp_rows = len(expected_orders)
+    exp_late = float(expected_orders["is_late"].mean())
 
     feat_cols = [c for c in features.columns if c not in ("order_id", "order_date")]
     nan_cols = [c for c in feat_cols if features[c].isna().any()]
@@ -128,6 +132,9 @@ def check_task_3(features, metrics: dict, con):
         (f"строк = числу доставленных заказов ({exp_rows:,})",
          len(features) == exp_rows,
          f"получилось {len(features):,}"),
+        ("сохранены все доставленные заказы, включая заказы без позиций",
+         set(features["order_id"]) == set(expected_orders["order_id"]),
+         "проверьте соединение с позициями и фильтр доставленных заказов"),
         ("нет признаков, которых не существует в момент заказа", not leaks,
          f"найдены признаки из будущего: {leaks}. Они вычисляются из даты "
          "доставки – то есть из того, что мы и пытаемся предсказать"),
